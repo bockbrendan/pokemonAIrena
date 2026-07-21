@@ -36,6 +36,30 @@ permissions granted (capture worked, so they are). `config.yaml` already `backen
 `capture: window`. Calibration probe: `python scripts/ocr_probe.py` (whole display) — for
 window/battle use the live snippet pattern from the session, or add `--region`.
 
+**Live emulator — relaunch recipe (mapped this session, macOS):** this RetroArch is the
+**sandboxed / App Store build** — its config, cores, saves, and states live under
+`~/Library/Containers/com.libretro.dist.RetroArch/Data/...`, NOT `~/Library/Application
+Support/RetroArch`. N64 core = **Mupen64Plus-Next**
+(`/Applications/RetroArch.app/Contents/Frameworks/mupen64plus.next.libretro.framework`).
+ROM = `Pokemon Stadium (USA) (Rev 2)/Pokemon Stadium (USA) (Rev 2).z64` (32 MB, USA Rev 2,
+from Vimm's Lair). A battery save (`.srm`) and RetroArch's content-history both already point
+at this ROM+core, so it relaunches straight into the game:
+
+    /Applications/RetroArch.app/Contents/MacOS/RetroArch \
+      -L "/Applications/RetroArch.app/Contents/Frameworks/mupen64plus.next.libretro.framework" \
+      "/Volumes/drive_4tb/Personal Projects/pokemonAIrena/Pokemon Stadium (USA) (Rev 2)/Pokemon Stadium (USA) (Rev 2).z64"
+
+There are **no save states** (`.../states/Mupen64Plus-Next` is empty) — no mid-battle resume,
+so Stadium's pre-battle menus (mode → cup → team → opponent → lead) must be navigated each boot
+to reach the action menu. Idle, RetroArch sits at Main Menu with **no core loaded** (verified
+this session; window capture works, 1920x1496 Retina frame).
+
+**Capture caveat (calibration risk):** window capture returns the FULL macOS window, title bar
+included. `ACTION` regions in `vision/layout.py` were calibrated at a 1194x1228 window; this
+session the window was 1920x1496 — a **different aspect ratio**, so the normalized ACTION boxes
+are NOT guaranteed to line up. Re-verify ACTION (and calibrate MOVES) at the actual working
+window size before trusting a live read, or size the window to the calibration aspect.
+
 ## Done
 - Scaffolded the harness (Pokémon-native layout, not mirroring flightgear).
 - CLAUDE.md ported from flightgear_harness: behavioral rules verbatim; Project /
@@ -143,7 +167,7 @@ A second observe/act approach that needs no RAM map: read the screen, drive the 
 - **Step 6 — arena + dashboard.** Win rate over N battles; reasoning/decision log UI.
 
 ## Notes / open questions
-- base_stats.json is a 17-species subset; add the rest of the 151 as needed.
+- base_stats.json now covers all 151 Gen 1 species (verified vs Bulbapedia).
 - Mock simplifications: no status/crit/accuracy rolls yet (deterministic max roll);
   voluntary switching supported, faint auto-switch picks first alive.
-- Not a git repo yet.
+- Git repo on `master`, remote `origin` = github.com/bockbrendan/pokemonAIrena. 57 tests pass.

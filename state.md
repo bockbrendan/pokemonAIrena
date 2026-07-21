@@ -17,7 +17,7 @@ Full design rationale: `../pokemon-battle-harness-plan.md`. Project rules: `CLAU
 ```bash
 python app.py            # play the default battle, one line per turn
 python app.py --quiet    # just the final result
-pytest                   # 34 tests: KB, damage, gate, full battle, RA transport, vision/OCR, LLM player, VisionBackend
+pytest                   # 57 tests: KB, damage, gate, full battle, RA transport, vision/OCR, LLM player, VisionBackend
 ```
 
 The vision path needs the optional `vision` extra (macOS): `pip install pillow
@@ -52,7 +52,7 @@ tests/       KB, damage, guardrails, full battle, retroarch transport, vision ob
 
 | Area | State |
 |---|---|
-| Knowledge base | ✅ type chart (Stadium-corrected), 17-species base stats, 18 moves |
+| Knowledge base | ✅ type chart (Stadium-corrected), all 151 base stats, 18 moves |
 | Damage/stat math | ✅ Gen 1 formula, single Special stat, category-by-type, deterministic |
 | Observe / act | ✅ `read_battle` + `send_input` over the Backend protocol |
 | Guardrail gate | ✅ legality + quality, logs every block |
@@ -63,7 +63,7 @@ tests/       KB, damage, guardrails, full battle, retroarch transport, vision ob
 | project64 backend | ⬜ stub (needs JS-script bridge) |
 | Vision observe (OCR) | ◑ `read_screen` → names + self HP, real Apple Vision OCR verified; layout uncalibrated |
 | Vision act (keyboard) | ◑ `world/keyboard.py` → RetroArch RetroPad; keystroke maps need calibration + Accessibility perm |
-| Tests | ✅ 34 passing (`pytest`) |
+| Tests | ✅ 57 passing (`pytest`) |
 
 `python app.py` plays a full, sensible, deterministic battle (player wins the
 default matchup in 8 turns, 0 gate blocks).
@@ -136,9 +136,15 @@ harness loop; pick one to drive to a full live battle. The rest are backend-inde
 
 ## Notes / open items
 
-- `kb/base_stats.json` is a 17-species subset — add the rest of the 151 as needed.
+- `kb/base_stats.json` now covers all 151 Gen 1 species (verified vs Bulbapedia).
 - Mock simplifications: no status/crit/accuracy rolls; faint auto-switch picks first alive.
 - User-added and kept as-is: `tests/test_retroarch_transport.py`, `scripts/probe_retroarch.py`.
-- **Not a git repo yet** — no version control initialized.
+- **Git repo** on `master`, remote `origin` = github.com/bockbrendan/pokemonAIrena.
+- **Live emulator (macOS):** sandboxed/App-Store RetroArch — config, cores, saves, states under
+  `~/Library/Containers/com.libretro.dist.RetroArch/Data/...`. N64 core = Mupen64Plus-Next
+  (`/Applications/RetroArch.app/Contents/Frameworks/mupen64plus.next.libretro.framework`);
+  ROM = `Pokemon Stadium (USA) (Rev 2)/<...>.z64`, with a `.srm` battery save + content-history
+  entry, so it relaunches via CLI (`RetroArch -L <core> "<rom>"`). No save states → Stadium's
+  pre-battle menus must be navigated each boot to reach the action menu. Details in `PROGRESS.md`.
 - Fixed during build: a fainted mon's just-switched-in replacement was wrongly acting
   mid-turn (actors now bind the attacker object at queue time).
