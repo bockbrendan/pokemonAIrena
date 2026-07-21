@@ -106,7 +106,8 @@ class VisionBackend:
         return self._kb_input
 
     def _frame(self):
-        return capture_region(self.region)
+        backend = self.cfg["world"].get("vision", {}).get("capture", "auto")
+        return capture_region(self.region, backend)
 
     # ---- observe -----------------------------------------------------------
     def _sync_from_screen(self, img=None) -> dict:

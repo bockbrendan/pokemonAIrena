@@ -10,6 +10,7 @@ world:
   vision:                  # backend: vision — play the REAL game via screen OCR + keyboard
     region: null           # capture rect [x, y, w, h] in screen points; null = whole display
     turn_wait: 4.0         # seconds to let a turn animate after a keystroke
+    capture: auto          # auto (screencapture on macOS, ImageGrab elsewhere) | screencapture | imagegrab
     ocr: auto              # auto (Vision on macOS, Tesseract elsewhere) | vision | tesseract
     keyboard: auto         # auto (by platform) | mac (Quartz) | windows (SendInput)
   project64:

@@ -63,7 +63,11 @@ A second observe/act approach that needs no RAM map: read the screen, drive the 
 - **Cross-platform keyboard** — `world/keyboard.py`: `MacKeyboard` (Quartz) +
   `WindowsKeyboard` (SendInput scancodes, stdlib ctypes). `make_keyboard(driver)`;
   `config world.vision.keyboard` = auto|mac|windows.
-- `requirements.txt` added (mirrors pyproject extras). 47 tests pass.
+- **Cross-platform capture** — `vision/capture.py`: `_grab_screencapture` (macOS CLI)
+  + `_grab_imagegrab` (Pillow ImageGrab, Windows+macOS, no new dep). `capture_region(
+  bbox, backend)`; `config world.vision.capture` = auto|screencapture|imagegrab. The
+  whole vision loop (capture→OCR→keyboard) now runs on Windows and macOS.
+- `requirements.txt` added (mirrors pyproject extras). 51 tests pass.
 - NOTE: still unverified against a live emulator; regions + keystroke maps need calibration.
 
 ### Vision path — remaining (needs the emulator on the user's machine)
