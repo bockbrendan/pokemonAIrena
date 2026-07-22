@@ -16,7 +16,7 @@ from __future__ import annotations
 import io
 from dataclasses import dataclass
 
-from PIL import Image
+from PIL import Image, ImageOps
 
 
 @dataclass(frozen=True)
@@ -45,9 +45,9 @@ class VisionOCR:
         src = self._Quartz.CGImageSourceCreateWithData(data, None)
         return self._Quartz.CGImageSourceCreateImageAtIndex(src, 0, None)
 
-    def recognize(self, img: Image.Image) -> list[OCRResult]:
+    def recognize(self, img: Image.Image, mode: str = "line") -> list[OCRResult]:
         V = self._Vision
-        cg = self._cgimage(img)
+        cg = self._cgimage(img)   # mode is a Tesseract hint; Vision reads game fonts natively
         req = V.VNRecognizeTextRequest.alloc().init()
         req.setRecognitionLevel_(V.VNRequestTextRecognitionLevelAccurate)
         req.setUsesLanguageCorrection_(False)
@@ -92,21 +92,71 @@ def _normalize_tesseract(data: dict, size: tuple[int, int]) -> list[OCRResult]:
     return out
 
 
+def _otsu_threshold(gray: Image.Image) -> int:
+    """Otsu's method: the 0-255 split that maximizes between-class variance. Pure PIL
+    (histogram), no numpy — adapts the binarization cut to each crop's own contrast."""
+    hist = gray.histogram()[:256]
+    total = sum(hist)
+    sum_total = sum(i * hist[i] for i in range(256))
+    sum_b = weight_b = best_var = threshold = 0
+    for t in range(256):
+        weight_b += hist[t]
+        if weight_b == 0:
+            continue
+        weight_f = total - weight_b
+        if weight_f == 0:
+            break
+        sum_b += t * hist[t]
+        mean_b = sum_b / weight_b
+        mean_f = (sum_total - sum_b) / weight_f
+        var = weight_b * weight_f * (mean_b - mean_f) ** 2
+        if var > best_var:
+            best_var, threshold = var, t
+    return threshold
+
+
+def _prep_tesseract(img: Image.Image, mode: str, scale: int) -> Image.Image:
+    """Isolate Stadium's light text for Tesseract. The RED channel is bright for white
+    text yet dark for BOTH the blue (self) and green (opp) HP panels, so it separates
+    text from panel colour far better than luminance. Upscale with NEAREST (keeps the
+    pixel-font edges crisp) + autocontrast. Single-word reads (species names) add an
+    Otsu binarization, which sharpens the letters; line reads (HP, moves, the action
+    bar) skip it, because a hard threshold swallows the thin '/' between HP numbers."""
+    red = img.convert("RGB").split()[0]
+    big = red.resize((red.width * scale, red.height * scale), Image.NEAREST)
+    big = ImageOps.autocontrast(big)
+    if mode == "word":
+        cut = _otsu_threshold(big)
+        big = big.point(lambda p: 255 if p > cut else 0)
+    return big
+
+
 class TesseractOCR:
-    """Tesseract via pytesseract — cross-platform (Windows / Linux / macOS).
+    """Tesseract via pytesseract — cross-platform (Windows / Linux / macOS), preprocessed
+    for Stadium's stylized on-screen text (see `_prep_tesseract`).
 
-    Needs the Tesseract binary on PATH plus `pip install pytesseract pillow`. `--psm 6`
-    (assume a uniform block of text) suits the small region crops this harness OCRs."""
+    Needs the Tesseract binary on PATH plus `pip install pytesseract pillow`. recognize()
+    takes a `mode`: 'line' (--psm 7, a text line — move names, the action bar), 'word'
+    (--psm 8 + Otsu, a single species name), or 'number' (--psm 7 + a digit/'/' whitelist,
+    HP counters — stops '124' being read as letters like 'IZ4')."""
 
-    def __init__(self, config: str = "--psm 6") -> None:
+    _PSM = {"line": 7, "word": 8, "number": 7}
+
+    # 5x upscale — at 4x the blurry blue-panel "2" in a self-HP "124" was dropped ("14");
+    # 5x reads it reliably. (Over-reads still clamp to the KB max in VisionBackend.)
+    def __init__(self, scale: int = 5) -> None:
         import pytesseract
         self._pt = pytesseract
-        self._config = config
+        self._scale = scale
 
-    def recognize(self, img: Image.Image) -> list[OCRResult]:
+    def recognize(self, img: Image.Image, mode: str = "line") -> list[OCRResult]:
+        prepped = _prep_tesseract(img, mode, self._scale)
+        config = f"--psm {self._PSM.get(mode, 7)}"
+        if mode == "number":
+            config += " -c tessedit_char_whitelist=0123456789/"
         data = self._pt.image_to_data(
-            img.convert("RGB"), config=self._config, output_type=self._pt.Output.DICT)
-        return _normalize_tesseract(data, img.size)
+            prepped, config=config, output_type=self._pt.Output.DICT)
+        return _normalize_tesseract(data, prepped.size)
 
 
 _VISION_HELP = (

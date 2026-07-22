@@ -3,7 +3,58 @@
 ## ⭐ HANDOFF — current live state (read this first)
 
 **Goal right now:** get the vision backend to play ONE real turn against Pokémon Stadium
-on RetroArch (macOS). Everything below the emulator is done and tested (57 tests pass).
+on RetroArch. Active work is now on **Windows**, in the fork **pokemonAIrena_kahn**
+(origin github.com/GenghisKahn/pokemonAIrena) — see the **Windows port** section directly
+below. Everything below the emulator is done and tested (56 pass on Windows; the 3 skips are
+the macOS-only Apple Vision OCR tests). The macOS notes further down are retained for that OS.
+
+> Env: use the shared venv at `../.venv` (Python 3.14 — has yaml/pytest/pytesseract). The
+> repo dir has no venv of its own. Run tests with `../.venv/Scripts/python.exe -m pytest -q`.
+
+### Windows port (fork: pokemonAIrena_kahn) — OBSERVE live-verified, move-select still blocked
+
+RetroArch on Windows: window class `RetroArch`, title `RetroArch Mupen64Plus-Next 2.8-Vulkan`,
+**Vulkan** renderer, client area ~1241x925.
+
+**✅ Live-verified end-to-end (production pipeline, not just tests):** at the action menu,
+`read_panels` returns SELF **Squirtle 124/124**, OPP **Meowth 120/120**; `action_menu_open` →
+True. Both species resolve via the KB (→ types/stats). Self *current*-HP is intermittent
+(124 or a misread 14 — the blue panel's "2"); best-effort and clamped, per the "type matchup
+is the signal, HP secondary" design. `config.yaml` is already `backend: vision`,
+`capture: window`, `window: RetroArch`.
+
+**What was built for Windows (our portion of the backend):**
+- **Window capture** — `vision/capture.py::_grab_window_windows`: `PrintWindow`
+  (`PW_CLIENTONLY | PW_RENDERFULLCONTENT`) grabs the window's OWN buffer, so it is
+  **occlusion-independent** (RetroArch can sit behind log/editor windows) and works with the
+  **Vulkan** renderer (plain PrintWindow / ImageGrab-of-screen-rect both fail — the latter
+  grabs whatever is on top). Stdlib ctypes, no new dep. `_pick_hwnd` matches by window
+  **class** first (title-substring fallback) so an Explorer folder named "RetroArch…" can't
+  be captured by mistake.
+- **OCR preprocessing** — `vision/ocr.py::_prep_tesseract` + a `mode` arg on `recognize`:
+  the **RED channel** isolates white text on BOTH the blue (self) and green (opp) panels
+  better than luminance; NEAREST upscale (keeps pixel-font edges) + autocontrast. Modes:
+  `word` (species names: psm 8 + Otsu), `number` (HP: psm 7 + digit/'/' whitelist — stops
+  "124"→"IZ4"), `line` (moves/bar: psm 7). `observe.py` threads the mode per region.
+  Apple Vision ignores the hint, so the macOS path is unchanged.
+- **Layout** — `vision/layout.py`: `ACTION_WIN` calibrated to the live 1241x925 client frame,
+  `ACTION_MAC` preserved; `ACTION` is selected by `sys.platform`. (Windows capture is
+  client-area only — no title bar — so its boxes differ from macOS by design.)
+- **Act path** — `world/keyboard.py::WindowsKeyboard` (SendInput scancodes) already existed;
+  **not yet exercised against the live game** (no keystrokes sent this session).
+- Tests: `tests/test_capture.py` gained class-preference + platform-dispatch cases; OCR stubs
+  updated for the `mode` arg. 56 pass.
+
+**🚧 BLOCKED (same as macOS):** the move-select flow. Pressing A likely hits an intermediate
+Cancel/Check screen before the 4 moves. Still need: drive `WindowsKeyboard` on the live game
+to map action-menu → moves, then calibrate `vision/layout.py::MOVES` + `world/vision.py::
+_MOVE_KEYS` (the single `press("a")` in `snapshot()` may need to be two). Also unbuilt:
+pre-battle menu nav, battle-end detection (`is_over` always False → bounded by
+`run.max_turns`), switching (`available_switches` empty).
+
+**Not yet committed** as of this handoff; work is in the fork's working tree.
+
+--- macOS handoff (retained) ---
 
 **Turn model (rewritten):** the harness anchors each turn on the **action menu**
 ("A BATTLE  B POKéMON  S RUN"), reads BOTH Pokémon off the panels, presses A to open the

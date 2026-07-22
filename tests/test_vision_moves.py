@@ -15,7 +15,7 @@ class _SlotOCR:
         self._slots = list(slots)
         self._i = 0
 
-    def recognize(self, _img):
+    def recognize(self, _img, _mode="line"):
         from vision.ocr import OCRResult
         t = self._slots[self._i] if self._i < len(self._slots) else ""
         self._i += 1

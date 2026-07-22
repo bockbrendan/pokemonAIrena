@@ -24,8 +24,10 @@ class UnknownMoveError(LookupError):
     and the raw text so it's actionable."""
 
 
-def _region_text(img, ocr, box) -> str:
-    return " ".join(r.text for r in ocr.recognize(crop_norm(img, box))).strip()
+def _region_text(img, ocr, box, mode: str = "line") -> str:
+    """OCR one region. `mode` hints the engine: 'line' for HP/moves/the action bar,
+    'word' for a single species name (Tesseract tunes psm/threshold on it)."""
+    return " ".join(r.text for r in ocr.recognize(crop_norm(img, box), mode)).strip()
 
 
 def match_species(text: str, kb: KB) -> str | None:
@@ -87,8 +89,8 @@ def read_panels(img, ocr, kb: KB, regions: dict) -> dict:
 
     recognize() call order per side: name, then hp — self first, then opp."""
     def side(pfx: str) -> dict:
-        name = match_species(_region_text(img, ocr, regions[f"{pfx}_name"]), kb)
-        hp = _HP.search(_region_text(img, ocr, regions[f"{pfx}_hp"]))
+        name = match_species(_region_text(img, ocr, regions[f"{pfx}_name"], "word"), kb)
+        hp = _HP.search(_region_text(img, ocr, regions[f"{pfx}_hp"], "number"))
         return {
             "name": name,
             "hp": int(hp.group(1)) if hp else None,
@@ -107,14 +109,14 @@ def action_menu_open(img, ocr, kb: KB, regions: dict | None = None) -> bool:
 
 def read_screen(img, ocr, kb: KB, regions: dict | None = None) -> dict:
     R = regions or _layout.BATTLE
-    self_hp = _HP.search(_region_text(img, ocr, R["self_hp"]))
+    self_hp = _HP.search(_region_text(img, ocr, R["self_hp"], "number"))
     return {
         "self": {
-            "name": match_species(_region_text(img, ocr, R["self_name"]), kb),
+            "name": match_species(_region_text(img, ocr, R["self_name"], "word"), kb),
             "hp": int(self_hp.group(1)) if self_hp else None,
             "max_hp": int(self_hp.group(2)) if self_hp else None,
         },
         "opp": {
-            "name": match_species(_region_text(img, ocr, R["opp_name"]), kb),
+            "name": match_species(_region_text(img, ocr, R["opp_name"], "word"), kb),
         },
     }

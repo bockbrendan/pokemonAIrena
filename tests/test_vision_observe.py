@@ -35,7 +35,7 @@ class _FakeOCR:
         self._texts = list(texts)
         self._i = 0
 
-    def recognize(self, _img):
+    def recognize(self, _img, _mode="line"):
         from vision.ocr import OCRResult
         t = self._texts[self._i]
         self._i += 1

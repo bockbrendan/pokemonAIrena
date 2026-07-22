@@ -25,7 +25,7 @@ class _SeqOCR:
     def __init__(self, texts):
         self._texts, self._i = list(texts), 0
 
-    def recognize(self, _img):
+    def recognize(self, _img, _mode="line"):
         from vision.ocr import OCRResult
         t = self._texts[min(self._i, len(self._texts) - 1)]
         self._i += 1

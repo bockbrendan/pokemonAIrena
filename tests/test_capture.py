@@ -58,3 +58,34 @@ def test_pick_window_matches_title_too():
     infos = [{"kCGWindowOwnerName": "python", "kCGWindowName": "RetroArch mupen64plus",
               "kCGWindowNumber": 9, "kCGWindowBounds": {"Width": 100, "Height": 100}}]
     assert capture._pick_window(infos, "retroarch") == 9
+
+
+def test_pick_hwnd_prefers_class_over_title():
+    # (hwnd, title, class, width, height)
+    cands = [
+        (1, "Finder", "CabinetWClass", 800, 600),
+        (2, "RetroArch-Win64", "CabinetWClass", 1900, 1000),        # big Explorer folder
+        (3, "RetroArch Mupen64Plus-Next", "RetroArch", 1241, 925),  # the emulator
+    ]
+    # class match wins even though the folder's title-match window is larger
+    assert capture._pick_hwnd(cands, "retroarch") == 3
+
+
+def test_pick_hwnd_falls_back_to_title_then_largest():
+    cands = [
+        (42, "RetroArch", "SDL_app", 640, 480),
+        (7, "RetroArch mupen64plus", "SDL_app", 1280, 960),  # no class match -> largest title
+    ]
+    assert capture._pick_hwnd(cands, "retroarch") == 7
+    assert capture._pick_hwnd(cands, "nonesuch") is None
+
+
+def test_grab_window_dispatches_by_platform(monkeypatch):
+    calls = []
+    monkeypatch.setattr(capture, "_grab_window_mac", lambda m: calls.append(("mac", m)))
+    monkeypatch.setattr(capture, "_grab_window_windows", lambda m: calls.append(("win", m)))
+    monkeypatch.setattr(capture.sys, "platform", "win32")
+    capture._grab_window("RetroArch")
+    monkeypatch.setattr(capture.sys, "platform", "darwin")
+    capture._grab_window("RetroArch")
+    assert calls == [("win", "RetroArch"), ("mac", "RetroArch")]
