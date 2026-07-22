@@ -18,10 +18,10 @@ RetroArch on Windows: window class `RetroArch`, title `RetroArch Mupen64Plus-Nex
 
 **✅ Live-verified end-to-end (production pipeline, not just tests):** at the action menu,
 `read_panels` returns SELF **Squirtle 124/124**, OPP **Meowth 120/120**; `action_menu_open` →
-True. Both species resolve via the KB (→ types/stats). Self *current*-HP is intermittent
-(124 or a misread 14 — the blue panel's "2"); best-effort and clamped, per the "type matchup
-is the signal, HP secondary" design. `config.yaml` is already `backend: vision`,
-`capture: window`, `window: RetroArch`.
+True. Both species resolve via the KB (→ types/stats). Self current-HP now reads reliably
+(124/124 over a 15-frame run) after the 5x-upscale fix + the KB-max clamp (see self-HP note
+below); a rare transient misread self-heals on the next turn's observe. `config.yaml` is
+already `backend: vision`, `capture: window`, `window: RetroArch`.
 
 **What was built for Windows (our portion of the backend):**
 - **Window capture** — `vision/capture.py::_grab_window_windows`: `PrintWindow`
@@ -33,10 +33,14 @@ is the signal, HP secondary" design. `config.yaml` is already `backend: vision`,
   be captured by mistake.
 - **OCR preprocessing** — `vision/ocr.py::_prep_tesseract` + a `mode` arg on `recognize`:
   the **RED channel** isolates white text on BOTH the blue (self) and green (opp) panels
-  better than luminance; NEAREST upscale (keeps pixel-font edges) + autocontrast. Modes:
+  better than luminance; NEAREST 5x upscale (keeps pixel-font edges) + autocontrast. Modes:
   `word` (species names: psm 8 + Otsu), `number` (HP: psm 7 + digit/'/' whitelist — stops
   "124"→"IZ4"), `line` (moves/bar: psm 7). `observe.py` threads the mode per region.
   Apple Vision ignores the hint, so the macOS path is unchanged.
+- **self-HP read** — the current-HP number was flaky at 4x (the blurry blue-panel "2" in
+  "124" dropped → "14"). Fixed by 5x upscale (`TesseractOCR` default) reading the digit
+  reliably; `VisionBackend` already clamps to the KB-derived max, so any over-read (e.g.
+  1244) collapses back to the real max. OCR's own max-HP number is unused — the KB owns it.
 - **Layout** — `vision/layout.py`: `ACTION_WIN` calibrated to the live 1241x925 client frame,
   `ACTION_MAC` preserved; `ACTION` is selected by `sys.platform`. (Windows capture is
   client-area only — no title bar — so its boxes differ from macOS by design.)
@@ -52,7 +56,8 @@ _MOVE_KEYS` (the single `press("a")` in `snapshot()` may need to be two). Also u
 pre-battle menu nav, battle-end detection (`is_over` always False → bounded by
 `run.max_turns`), switching (`available_switches` empty).
 
-**Not yet committed** as of this handoff; work is in the fork's working tree.
+**Committed** to the fork's `master` as `23b2863` ("Windows vision: PrintWindow capture +
+Tesseract preprocessing, live-calibrated"). Not pushed to origin yet.
 
 --- macOS handoff (retained) ---
 
