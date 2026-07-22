@@ -14,10 +14,12 @@ path** — I diagnosed three breakages and fixed them on `combined_dev` (off `ma
    `diamond_select` raised `KeyError` on `c_up` and the "single biggest reliability fix" was gone. Restored
    the live-verified C-button keymap + the `MacKeyboard` mouse-mover (+ `_window_center`/`_mouse_loop`/
    `stop` + the pyobjc symbol pre-resolve), and removed the duplicated class docstring the merge left.
-2. **`world/keyboard.py` — Windows scancodes reconciled.** Kept the shared `diamond_select` primitive but
-   pointed the Windows `c_up/left/right/down` at PR #1's **live-verified** PgUp/Home/PgDn/End nav cluster
-   (not the N/M/B/L letter keys mirrored from macOS), plus the verified `a/b` values. `select` (Z, `0x2C`)
-   is the same physical key PR #1 called the "A button", so the primitive fires the proven Windows sequence.
+2. **`world/keyboard.py` — distinct diamond-commit map per OS.** The two RetroArch configs are genuinely
+   different (confirmed), so the diamond-commit keys are now a per-driver attribute `_DIR_MAP` instead of a
+   shared `_DIR_TO_C`: macOS → `_DIR_TO_C` (N64 **C-buttons** N/M/B/L), Windows → `_DIR_TO_DIA` (the
+   **PgUp/Home/PgDn/End** nav cluster, live-verified in PR #1). `diamond_select` uses `self._DIR_MAP`, so
+   neither OS borrows the other's key names; only the open/preview/back keys (`select`/`check`/`cancel` =
+   Z/W/Q) are shared because both configs put them on the same physical keys.
 3. **`vision/layout.py` — import error.** The merge left `ACTION_WIN`/`ACTION_MAC` referencing an undefined
    `_ACTION_SHARED` (and no `ACTION_MAC`), so every vision import raised `NameError`. Rebuilt the intended
    `_ACTION_SHARED` → `ACTION_MAC`/`ACTION_WIN` → platform-dispatched `ACTION` structure.

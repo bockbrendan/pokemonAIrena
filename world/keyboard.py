@@ -44,30 +44,32 @@ _MAC_KEYCODES = {
     # legacy aliases (older code/tests): a=X, b=Z, l=Q, r=W
     "a": 7, "b": 6, "l": 12, "r": 13,
 }
+# macOS diamond commit: the four cells are the N64 C-buttons (letter keys).
 _DIR_TO_C = {"up": "c_up", "down": "c_down", "left": "c_left", "right": "c_right"}
 
 # ---- Windows: game key -> (hardware scancode, is_extended_key) ------------------
-# Reconciled from PR #1's LIVE-VERIFIED Windows binds. The first press of the move-select is
-# the Z key (0x2C) — macOS calls it "select", the Windows work called it the "A button"; same
-# physical key. The diamond directions were live-verified on Windows as the PgUp/Home/PgDn/End
-# nav cluster (NOT the N/M/B/L letter keys that were mirrored from macOS), so the shared
-# diamond_select primitive (select -> c_<dir>) drives them here via the c_* names below.
+# The Windows RetroArch config is a DIFFERENT input mapping from the macOS one (confirmed:
+# they are two distinct per-machine configs, not the same layout). Here the move/party diamond
+# is committed with the PgUp/Home/PgDn/End nav cluster (dia_*, LIVE-VERIFIED in PR #1), whereas
+# macOS commits with the N/M/B/L C-buttons. Only the open/preview/back keys coincide (both configs
+# put those on Z/W/Q). Each driver picks its own commit map via `_DIR_MAP`, so nothing here is
+# forced to borrow the other OS's key names.
 _WIN_SCANCODES = {
-    "select": (0x2C, False),   # Z  -> opens the move/party diamond (a.k.a. the "A button")
+    "select": (0x2C, False),   # Z  -> opens the move-select screen (this config's "A button")
     "check": (0x11, False),    # W  -> R/Check: HOLD to preview the diamond's option names
-    "cancel": (0x10, False),   # Q  -> L/Cancel
+    "cancel": (0x10, False),   # Q  -> L/Cancel: back out of the move-select screen
     "start": (0x1C, False),    # Enter
-    # diamond directions — Windows-verified as the PgUp/Home/PgDn/End nav cluster (PR #1)
-    "c_up": (0x49, True),      # PgUp -> ▲
-    "c_left": (0x47, True),    # Home -> ◀
-    "c_right": (0x51, True),   # PgDn -> ▶
-    "c_down": (0x4F, True),    # End  -> ▼
+    # the four diamond directions — the PgUp/Home/PgDn/End nav cluster (Windows-verified, PR #1)
+    "dia_up": (0x49, True),    # PgUp -> ▲
+    "dia_left": (0x47, True),  # Home -> ◀
+    "dia_right": (0x51, True), # PgDn -> ▶
+    "dia_down": (0x4F, True),  # End  -> ▼
     "up": (0x48, True), "down": (0x50, True), "left": (0x4B, True), "right": (0x4D, True),
     # legacy aliases: a=A button(Z), b=B button(A key), l=Q, r=W (Windows-verified values)
     "a": (0x2C, False), "b": (0x1E, False), "l": (0x10, False), "r": (0x11, False),
-    # dia_* aliases kept for Windows-native code that addresses the diamond directly
-    "dia_up": (0x49, True), "dia_left": (0x47, True), "dia_right": (0x51, True), "dia_down": (0x4F, True),
 }
+# Windows diamond commit: the four cells are the PgUp/Home/PgDn/End nav keys.
+_DIR_TO_DIA = {"up": "dia_up", "down": "dia_down", "left": "dia_left", "right": "dia_right"}
 
 
 def _win_key(button: str) -> tuple[int, bool]:
@@ -78,7 +80,11 @@ def _win_key(button: str) -> tuple[int, bool]:
 
 
 class _Keyboard:
-    """Common tap timing; subclasses implement _down/_up and activate()."""
+    """Common tap timing; subclasses implement _down/_up and activate(), and set `_DIR_MAP`
+    to their config's diamond-commit keys (macOS = C-buttons, Windows = nav cluster)."""
+
+    # direction -> button name for diamond_select; overridden per OS driver (distinct configs).
+    _DIR_MAP: dict[str, str] = {}
 
     def _down(self, button: str) -> None: ...      # pragma: no cover - per-OS
     def _up(self, button: str) -> None: ...        # pragma: no cover - per-OS
@@ -113,14 +119,15 @@ class _Keyboard:
     def diamond_select(self, direction: str, settle: float = 1.6) -> None:
         """Commit one option from the Stadium move/party 'diamond'. THE core act primitive
         (live-verified 2026-07-22): 'select' (Z) opens the pre-commit screen, then the
-        C-button for `direction` (up/down/left/right) chooses that cell — the SAME mechanic
-        for both moves and switches. Requires the mouse to be moving (MacKeyboard runs a
-        persistent mover). Callers should retry until observe confirms the effect."""
-        if direction not in _DIR_TO_C:
-            raise ValueError(f"direction must be one of {sorted(_DIR_TO_C)}, got {direction!r}")
+        commit key for `direction` (up/down/left/right) chooses that cell — the SAME mechanic
+        for both moves and switches. The commit keys differ by OS config (`_DIR_MAP`): macOS
+        uses the C-buttons, Windows the PgUp/Home/PgDn/End nav cluster. Requires the mouse to
+        be moving (MacKeyboard runs a persistent mover). Retry until observe confirms."""
+        if direction not in self._DIR_MAP:
+            raise ValueError(f"direction must be one of {sorted(self._DIR_MAP)}, got {direction!r}")
         self.press("select")
         time.sleep(settle)
-        self.press(_DIR_TO_C[direction])
+        self.press(self._DIR_MAP[direction])
 
 
 class MacKeyboard(_Keyboard):
@@ -130,6 +137,8 @@ class MacKeyboard(_Keyboard):
     RetroArch — our own event tap catches the synthetic key but RetroArch ignores it
     (pause_nonactive + its cocoa driver reads per-window events). Posting to RetroArch's
     pid with CGEventPostToPid *does* reach it. So we resolve the pid and target it."""
+
+    _DIR_MAP = _DIR_TO_C     # macOS commits the diamond with the N64 C-buttons
 
     def __init__(self, move_mouse: bool = True) -> None:
         import Quartz
@@ -218,6 +227,8 @@ class MacKeyboard(_Keyboard):
 
 class WindowsKeyboard(_Keyboard):
     """Windows SendInput with hardware scancodes (stdlib ctypes)."""
+
+    _DIR_MAP = _DIR_TO_DIA   # Windows commits the diamond with the PgUp/Home/PgDn/End nav keys
 
     def __init__(self) -> None:
         import ctypes  # noqa: F401

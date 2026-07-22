@@ -159,16 +159,16 @@ The vision path now runs on **Windows** too; `sys.platform` selects the OS-speci
   (the two capture paths trim edges differently). `ACTION` picks by platform.
 - **`world/keyboard.py::WindowsKeyboard`** — `SendInput` with hardware scancodes. Three live-fixed bugs:
   the `INPUT` struct must be 40 bytes (the union needs a `MOUSEINPUT` member or `SendInput` sends nothing);
-  `activate()` force-focuses via `AttachThreadInput`; and the key binds were corrected. **Reconciliation
-  note:** on Windows the diamond directions are the **PgUp/Home/PgDn/End** nav cluster (live-verified in
-  PR #1), *not* the N/M/B/L letter keys macOS uses. Rather than fork the shared `diamond_select` primitive,
-  the Windows `_WIN_SCANCODES` maps the `c_up/left/right/down` names onto those nav scancodes, so
-  `diamond_select` (`select` → `c_<dir>`) fires PR #1's proven sequence. `select` (Z, `0x2C`) is the same
-  physical key the PR called the "A button".
-- **⚠️ Open question for the Windows owner:** PR #1 describes the flow as action menu → `a` (BATTLE) →
-  move screen → hold `r` (Check) → diamond, whereas the macOS finding is `z`(select) → C-button with *no*
-  BATTLE bar. These are likely two different per-machine RetroArch input configs, not a contradiction —
-  worth confirming before trusting either key map cross-machine.
+  `activate()` force-focuses via `AttachThreadInput`; and the key binds were corrected.
+- **Distinct input configs per OS (confirmed — they are two different RetroArch input maps, not one layout).**
+  The shared `diamond_select` primitive is `press("select")` → settle → `press(_DIR_MAP[dir])`; each driver
+  sets its own `_DIR_MAP`:
+  - **macOS** (`MacKeyboard._DIR_MAP = _DIR_TO_C`) commits with the N64 **C-buttons** — `c_up/down/left/right`
+    = N/M/B/L keys.
+  - **Windows** (`WindowsKeyboard._DIR_MAP = _DIR_TO_DIA`) commits with the **PgUp/Home/PgDn/End nav cluster**
+    — `dia_up/left/right/down` (live-verified in PR #1).
+  Only the open/preview/back keys coincide (both configs put `select`/`check`/`cancel` on Z/W/Q), so those
+  keep shared names; the diamond commit is fully separate per OS. Neither map borrows the other's key names.
 
 ## Scratch artifacts (in `/tmp`)
 
