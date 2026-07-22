@@ -12,8 +12,11 @@ provider only speaks tokens, so both backends share the same parser.
       covers claude.ai and Claude Code, not raw Messages API calls — see README.
 - LlamaCppProvider — a local `llama-server` (llama.cpp) over its OpenAI-compatible
   /v1/chat/completions endpoint. No API key, no cloud, no per-token cost.
+- ClaudeCliProvider — shells out to the Claude Code CLI (`claude -p`), i.e. your Claude
+  subscription. No API key, no local server — the way to test the autonomous loop on a
+  machine that already runs Claude Code. Slower (a CLI spin-up per turn), so test/eval only.
 
-Both are constructed lazily so importing this module never requires the optional
+All are constructed lazily so importing this module never requires the optional
 `anthropic` dependency; only building a ClaudeProvider does.
 """
 from __future__ import annotations
@@ -38,7 +41,15 @@ def make_provider(agent_cfg: dict):
             model=agent_cfg.get("model", "local"),
             max_tokens=agent_cfg.get("max_tokens", 64),
         )
-    raise ValueError(f"unknown agent.provider: {kind!r} (expected 'claude' or 'llamacpp')")
+    if kind == "claudecli":
+        cc = agent_cfg.get("claudecli", {})
+        return ClaudeCliProvider(
+            command=cc.get("command", "claude"),
+            timeout=cc.get("timeout", 60.0),
+            extra_args=cc.get("extra_args"),
+        )
+    raise ValueError(
+        f"unknown agent.provider: {kind!r} (expected 'claude', 'llamacpp', or 'claudecli')")
 
 
 class ClaudeProvider:
@@ -58,6 +69,33 @@ class ClaudeProvider:
             messages=[{"role": "user", "content": user}],
         )
         return "".join(b.text for b in resp.content if b.type == "text").strip()
+
+
+class ClaudeCliProvider:
+    """Decisions via the local Claude Code CLI (`claude -p`), i.e. YOUR Claude
+    subscription — no API key, no per-token billing, no local server. This is the way to
+    exercise the autonomous loop end to end on a machine that already runs Claude Code
+    (the same brain that plays it by hand in the CLI, now called once per turn by
+    `app.py`). Slower than the API (it spins up the CLI per call), so it's a test/eval
+    provider, not a latency-sensitive one.
+
+    The prompt (system + state) is fed on stdin in headless print mode; stdout is the
+    model's reply, which LLMPlayer parses to an Action exactly like the other providers."""
+
+    def __init__(self, command: str = "claude", timeout: float = 60.0,
+                 extra_args=None) -> None:
+        self.command = command
+        self.timeout = timeout
+        self.extra_args = list(extra_args or [])
+
+    def complete(self, system: str, user: str) -> str:
+        import subprocess
+        prompt = f"{system}\n\n{user}"
+        proc = subprocess.run(
+            [self.command, "-p", *self.extra_args],
+            input=prompt, capture_output=True, text=True, timeout=self.timeout,
+        )
+        return (proc.stdout or "").strip()
 
 
 class LlamaCppProvider:

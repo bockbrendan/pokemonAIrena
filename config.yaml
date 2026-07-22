@@ -44,8 +44,11 @@ guardrails:
 agent:
   player: llm        # heuristic (deterministic, no API) | llm
   # --- used only when player: llm ---
-  provider: llamacpp       # claude (Anthropic API) | llamacpp (local server, no API key/cost)
+  provider: claudecli      # claude (Anthropic API) | llamacpp (local server) | claudecli (Claude Code CLI, no key/server)
   model: local             # claude: model id (Haiku = low cost) | llamacpp: served name (llama-server ignores)
+  claudecli:               # provider: claudecli -> decisions via `claude -p` (your subscription)
+    command: claude        # the Claude Code CLI on PATH
+    timeout: 60            # seconds per decision (CLI spin-up is slower than the API)
   max_tokens: 64           # a move pick is one short line
   llamacpp:                # local llama.cpp server (llama-server), OpenAI-compatible
     host: 127.0.0.1

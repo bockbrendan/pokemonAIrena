@@ -14,6 +14,7 @@ def _cfg():
 
 def test_default_battle_resolves():
     cfg = _cfg()
+    cfg["agent"]["player"] = "heuristic"   # deterministic + offline: never drive a live LLM/CLI in tests
     kb = default_kb()
     result = battle(MockBattle(cfg), make_player(cfg), kb, cfg)
     assert result["winner"] in {"player", "opponent"}          # someone won
