@@ -32,8 +32,8 @@ from battle.state import Action
 from kb import default_kb
 from vision import layout as _layout
 from vision.capture import capture_region
-from vision.observe import (action_menu_open, read_moves, read_panels,
-                            read_party, switch_screen_open)
+from vision.observe import (action_menu_open, on_battle_screen, read_moves,
+                            read_panels, read_party, switch_screen_open)
 
 # Diamond slot -> D-pad direction (the C-button the actuator presses). Fixed order so a
 # slot index the agent chose maps to one deterministic direction.
@@ -61,6 +61,8 @@ class VisionBackend:
         self._awaiting: str | None = None      # "move" | "switch"
         self.pending: Action | None = None
         self._done = False
+        self._winner: str | None = None        # "self" | "opponent" | None (unknown)
+        self._off_screen = 0                   # consecutive non-battle frames (end debounce)
 
     # ---- dependencies (lazy on real runs) ----------------------------------
     def _ocr_engine(self):
@@ -153,6 +155,8 @@ class VisionBackend:
         if forced_switch:
             self._awaiting = "switch"
             self._party = self._peek_party()
+            if self._party and not any((p.get("hp") or 0) > 0 for p in self._party):
+                self._done, self._winner = True, "opponent"     # nothing left to send out
         else:
             self._awaiting = "move"
             if not self._self["moves"]:                        # cache: only re-read when unknown
@@ -224,7 +228,23 @@ class VisionBackend:
 
     # ---- close out ---------------------------------------------------------
     def is_over(self) -> bool:
+        """Battle end. Once set, stays set. Otherwise DEBOUNCE on leaving the battle
+        screens: when the game is no longer showing the action bar / a forced switch /
+        both HP panels for `end_polls` consecutive checks, the battle has ended (result
+        screen). ⚠️ Winner is only known for sure in the forced-switch-with-no-party case;
+        the result-SCREEN itself (win vs loss text) still needs a live calibration pass —
+        `max_turns` remains the backstop."""
+        if self._done:
+            return True
+        v = self.cfg["world"].get("vision", {})
+        if on_battle_screen(self._frame(), self._ocr_engine(), self.kb, _layout.ACTION):
+            self._off_screen = 0
+        else:
+            self._off_screen += 1
+            if self._off_screen >= v.get("end_polls", 5):
+                self._done = True
         return self._done
 
     def result(self) -> dict:
-        return {"winner": None, "player_remaining": None, "opponent_remaining": None}
+        return {"winner": self._winner, "player_remaining": None,
+                "opponent_remaining": None}

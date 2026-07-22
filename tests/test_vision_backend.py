@@ -16,7 +16,8 @@ from world.vision import VisionBackend
 def _cfg():
     with open("config.yaml", encoding="utf-8") as f:
         c = yaml.safe_load(f)
-    c["world"]["vision"].update({"menu_wait": 0, "turn_wait": 0, "poll": 0, "act_retries": 1})
+    c["world"]["vision"].update({"menu_wait": 0, "turn_wait": 0, "poll": 0,
+                                 "act_retries": 1, "end_polls": 2})
     return c
 
 
@@ -96,3 +97,15 @@ def test_move_action_commits_via_diamond_select():
     b.send_action(Action("move", 2))              # slot 2 -> down (index 2 in up,right,down,left)
     b.step()
     assert kb.selects[-1] == "down"
+
+
+def test_still_on_battle_screen_is_not_over():
+    assert _backend([_BAR]).is_over() is False
+
+
+def test_battle_ends_after_leaving_the_battle_screens():
+    # A settled non-battle screen (no bar, no panels) for end_polls checks -> battle over.
+    b = _backend([""])                            # empty/result screen
+    for _ in range(b.cfg["world"]["vision"]["end_polls"]):
+        b.is_over()
+    assert b.is_over() is True

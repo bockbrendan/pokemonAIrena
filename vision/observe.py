@@ -115,6 +115,16 @@ def switch_screen_open(img, ocr, kb: KB, regions: dict | None = None) -> bool:
     return "CHECK" in text and "CANCEL" not in text and "BATTLE" not in text and "RUN" not in text
 
 
+def on_battle_screen(img, ocr, kb: KB, regions: dict) -> bool:
+    """True while we're still in a battle: the action bar, a forced-switch prompt, or
+    both HP panels are showing. False on a settled result/non-battle screen (used, with
+    a debounce, to detect battle end). Cheap — reuses the ACTION bar + panel reads."""
+    if action_menu_open(img, ocr, kb, regions) or switch_screen_open(img, ocr, kb, regions):
+        return True
+    panels = read_panels(img, ocr, kb, regions)
+    return bool(panels["self"]["name"] and panels["opp"]["name"])
+
+
 def read_party(img, ocr, kb: KB, regions: dict) -> list[dict]:
     """Read the forced-switch party diamond (revealed by holding Check) into a list of
     {name, hp, max_hp}, in DIAMOND-SLOT order (up, right, down, ...) so a slot index maps
