@@ -4,9 +4,12 @@ _A cold-start briefing: what this is, how it fits together, what works, and what
 
 > **⚠️ For the LIVE current state (2026-07-22), read [`HANDOFF.md`](HANDOFF.md).** This file
 > describes the original RAM-map design; the project has since pivoted to a **vision + keyboard**
-> approach on RetroArch. Observe works and is window-size-independent; the sole remaining blocker is
-> the **move-commit key sequence** (how to actually USE a move). See HANDOFF.md for the input model,
-> emulator config, uncommitted changes, and next steps.
+> approach on RetroArch, and that path now works end to end: observe (window-size-independent), the
+> `z`→C-button "diamond" move/switch primitive, continuous-mouse + retry reliability, faint/switch
+> handling, and win/loss detection — **an auto-player drove a complete 3-Pokémon battle to a detected
+> loss.** The KB is complete (165 Gen 1 moves + 151 species). The one remaining step is running
+> `python app.py` so the *agent* drives a battle end to end, then tuning timings. See HANDOFF.md for
+> the input model, emulator config, and next steps.
 
 ## What it is
 

@@ -3,6 +3,37 @@
 > **👉 Read [`HANDOFF.md`](HANDOFF.md) first** — it is the authoritative current-state briefing
 > (2026-07-22). The session logs below are the detailed trail; HANDOFF.md is the summary.
 
+## ⭐⭐⭐⭐ SESSION 2026-07-22 — FULL BATTLE PLAYED END-TO-END + KB COMPLETE
+
+The whole vertical slice now works and is live-verified. Highlights (all committed; branch `brendan_dev`):
+
+- **The turn primitive is `diamond_select`** — one mechanic for BOTH moves and switches: `z` opens the
+  pre-commit screen, then the **C-button** for a diamond direction commits (▲Up=`n` ▼Down=`m` ◀Left=`b`
+  ▶Right=`l`). Holding `w`/Check only previews the option names. ("`L` used Ice Beam" = the user meant the
+  **`l` key** = C-right, not the L shoulder.) Live-verified: a move fired and the turn resolved.
+- **Reliability = continuous mouse + retry.** RetroArch throttles input/render when the cursor is idle;
+  `MacKeyboard` runs a persistent mouse-mover thread, and `step()` retries until observe confirms the HP/
+  name changed. This is what made the flaky input usable.
+- **Harness rewritten for the diamond model** (`world/vision.py`, `world/keyboard.py`): `awaiting_input`
+  infers action-bar vs forced-switch from on-screen prompts; `snapshot` peeks moves/party; `step` commits
+  via `diamond_select` + retry.
+- **Diamond cells calibrated live** (`vision/layout.py` MOVES/PARTY) — reads real move names and party.
+- **Faint/switch flow** live-verified — auto-switched to a type-correct Pokémon (Sandshrew, Ground, immune
+  to Magnemite's Electric).
+- **Battle-end + winner detection** (`vision/observe.py::battle_result`) — reads the real 1P=LOSE / COM=WIN
+  result screen; `is_over()`/`result()` report the winner.
+- **A complete 3-Pokémon battle was played to its conclusion** by an auto-player: Squirtle → (fainted) →
+  Sandshrew → (fainted) → Clefairy; KO'd Oddish; lost to Psyduck's crit — through faints, switches, and a
+  detected loss.
+- **KB completed:** `kb/moves.json` 18 → **165 Gen 1 moves** (base stats already covered all 151 species),
+  so the agent can classify any moveset the vision backend reads.
+- Emulator fixes locked in: windowed, no pause-on-unfocus, `mfi→hid` joypad driver (fixed the load-crash),
+  `config_save_on_exit=false`, App Nap disabled.
+- **61 tests pass.**
+
+**The one remaining step:** run `python app.py` so the *agent* (heuristic/LLM), not the hardcoded auto-
+player, drives a battle end to end; then tune timings. See HANDOFF.md → Immediate next steps.
+
 ## ⭐⭐⭐ SESSION 2026-07-21 (part 4) — MOVE SCREEN CRACKED (the whole-session blocker)
 
 **The move-select IS a D-pad DIAMOND** (the old "part 1" note was right; the "action bar → move list"

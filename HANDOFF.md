@@ -13,18 +13,22 @@ the agent proposes a move, a guardrail gate vets it, `send_input()` actuates it.
 
 | Layer | State |
 |---|---|
-| Battle core (types, damage, KB, guardrails), mock backend, 58 tests | ✅ Done & passing |
-| **Observe** (window capture → OCR → both panels + turn detection) | ✅ **Solid & window-size-independent** |
+| Battle core (types, damage, guardrails), mock backend, **61 tests** | ✅ Done & passing |
+| **Knowledge base** — 151 species base stats + **all 165 Gen 1 moves** | ✅ **Complete** (was 18 moves) |
+| **Observe** (window capture → OCR → both panels + turn detection) | ✅ Solid & window-size-independent |
 | Emulator config (windowed, no-pause, no crash-on-load) | ✅ Fixed & locked |
-| **Input / move commit / switch** (`z` → C-button "diamond") | ✅ **SOLVED & live-verified** (move fired, switch worked) |
-| **Harness wired for the diamond model** (keyboard + vision backend) | ✅ Implemented, 58 tests pass, imports clean |
-| Live calibration of move/party diamond cells; end-to-end `app.py` | 🔧 needs one live pass |
-| Battle-end detection / turn-completion tuning | 🔧 partial (`_changed` retry in; no win/loss screen yet) |
+| **Input / move commit / switch** (`z` → C-button "diamond") | ✅ SOLVED & live-verified |
+| **Diamond cell calibration** (`MOVES` / `PARTY` boxes) | ✅ **Calibrated live** (reads real moves/party) |
+| **Faint / switch flow** | ✅ Live-verified (auto-switched to a type-correct mon) |
+| **Battle-end + winner detection** (`is_over` / `result`) | ✅ **Done & live-verified** on a real result screen |
+| **A full 3-Pokémon battle, end to end** | ✅ **Played to conclusion** by an auto-player |
+| `python app.py` driven by the *agent* (heuristic/LLM), start to win/loss | 🔧 the one remaining live pass |
 
-**Bottom line:** the whole turn is cracked and the harness is built around it. A full turn fires
-(`z`→C-button committed Ice Beam; Squirtle fainted; a type-correct switch to Sandshrew worked). What
-remains is a **live calibration/tuning pass**: dial in the `MOVES`/`PARTY` diamond-cell boxes against
-real diamond frames, add win/loss detection, and run `python app.py` end-to-end.
+**Bottom line:** every mechanic is built, tested, and live-verified. An auto-player drove a **complete
+battle** — Squirtle → (fainted) → Sandshrew → (fainted) → Clefairy, KO'd Oddish, lost to Psyduck's crit —
+through faints, switches, and a detected loss screen. The KB is complete so the agent can classify any
+moveset. **What remains is running `python app.py` so the *agent* (not the hardcoded auto-player) drives a
+battle end to end, then tuning timings** (`turn_wait` / `act_retries` / peek cadence).
 
 ---
 
@@ -65,6 +69,16 @@ Moves and switches are the SAME mechanic:
 Proven end-to-end: `z`→`l` fired Ice Beam (Magnemite took damage); Squirtle then fainted to Magnemite's
 super-effective Electric; `z`→`m` sent out Sandshrew ("Go! SANDSHREW!"). `enter` (Start) reaches a
 different "look at field" screen — ignore it; use the `z` path.
+
+**Forced switch (faint):** same primitive. On a faint the bar shows only "R Check" (no BATTLE/Cancel).
+HOLD `w` reveals the party as a diamond (▲/▶/▼ = your Pokémon; fainted ones show ✖/"FAINTED"), then
+`z`→C-button picks one. `read_party` reads them in slot order and excludes fainted mons (their `0` HP
+OCRs as the letter `O` — handled).
+
+**Battle end + winner** (`vision/observe.py::battle_result`, live-verified): the result screen stacks
+**`1P`** (player, top) over **`COM`** (opponent, bottom), each with a big **WIN**/**LOSE** word. The
+WIN/LOSE nearest the `1P` row is the player's outcome → `"self"` (won) / `"opponent"` (lost). `is_over()`
+checks this first, with a "left the battle screens for N polls" debounce as fallback.
 
 ---
 
@@ -108,43 +122,47 @@ different "look at field" screen — ignore it; use the `z` path.
   (inferred from prompts); `snapshot` reads panels, then peeks moves (`z`→hold `w`→OCR→cancel) or the party
   on a forced switch; `step` commits via `diamond_select(slot→direction)` with **retry-until-observed**
   (`_changed` checks HP/name moved). `_SLOT_DIR = (up,right,down,left)`.
-- **`vision/observe.py`** — added `switch_screen_open` (faint detector) + `read_party`; `_HP` whitespace-tolerant.
-- **`vision/layout.py`** — `ACTION` boxes at viewport coords; `MOVES` = diamond cells; new `PARTY` cells.
-  ⚠️ `MOVES`/`PARTY` boxes are APPROXIMATE — need a live calibration pass.
+- **`vision/observe.py`** — `switch_screen_open` (faint detector), `read_party` (fainted-aware),
+  `on_battle_screen`, and **`battle_result`** (the WIN/LOSE result-screen reader); `_HP` tolerates
+  `/`, whitespace, or `.` as the separator.
+- **`vision/layout.py`** — `ACTION`, `MOVES` (move diamond), and `PARTY` boxes **all calibrated live**
+  against real viewport frames.
 - **`vision/capture.py`** — `_crop_to_viewport()` (title bar + letterbox removal) → window-size-independent.
-- **`tests/test_vision_backend.py`** — rewritten for the diamond model.
+- **`kb/moves.json`** — completed to **all 165 Gen 1 moves** (type/power/accuracy/pp; category derived
+  from type; Gen-1 quirks encoded). `kb/base_stats.json` already had all 151 species.
+- **`tests/test_vision_backend.py`** — diamond model + battle-end/`battle_result` tests.
 
-Tests: **58 pass**; backend/player construct and all modules import clean. First commit of the earlier
-half (`c26cf89`) is pushed; the diamond-model code above is the follow-up.
+Tests: **61 pass**; backend/player construct and all modules import clean.
 
-## Scratch artifacts (in `/tmp`, this session)
+## Scratch artifacts (in `/tmp`)
 
-- `/tmp/pk_exp.py` — input+classify helpers (PostToPid press, save/reset, screen classify).
-- `/tmp/pk_play_loop.py` — retry-until-HP-drops turn loop (move=`L`; landed 0 moves — needs the real
-  commit key). `/tmp/pk_retryL.py` — retry-L probe.
-- Frames: `/tmp/pk_whold_view.png` (the move diamond), `/tmp/pk_moveselect*.png`, `/tmp/pk_frame_window.png`.
+- `/tmp/pk_drive.py` — persistent-mouse harness (the reliable input pattern). `/tmp/pk_conclude.py` — the
+  auto-player that drove a full battle to its end. Helpers: `/tmp/pk_exp.py`.
+- Frames: `/tmp/pk_movediamond2.png` (Clefairy move diamond), `/tmp/pk_checkheld.png` (party check),
+  `/tmp/pk_RESULT.png` (the 1P=LOSE / COM=WIN result screen).
 
 ---
 
 ## Immediate next steps (in order)
 
-1. **Live-calibrate the diamond cell boxes.** Get a real move-diamond viewport frame (`z`→hold `w`) and
-   a party frame, OCR them (`scripts/ocr_probe.py`), and set `vision/layout.py::MOVES` (up/right/down/left)
-   and `PARTY` so `read_moves`/`read_party` read cleanly. The `MOVES`/`PARTY` boxes shipped are estimates.
-2. **Run `python app.py` end-to-end** against a live battle at the action menu. Watch for: moves reading,
-   the agent's pick, `diamond_select` firing, `_changed` confirming, and the forced-switch path. Tune
-   `turn_wait` / `act_retries` / the peek timing.
-3. **Battle-end detection** — `is_over()` currently returns `_done` (never set). Add a win/loss-screen
-   detector (all 3 fainted / result screen) so a battle terminates instead of hitting `max_turns`.
-4. Verify **switch peeking** (`read_party` slot→direction) matches the on-screen party order; confirm
-   the fainted-active-in-slot-0 index model against `available_switches`.
-5. Solve reliable **relaunch-into-battle** (menu "Run" activation) so crashes can auto-recover unattended.
+1. **Run `python app.py` agent-driven, end to end.** The mechanics are proven by the auto-player; the
+   remaining step is letting the *agent* (`config.yaml` → `agent.player: heuristic` for no-API, or `llm`)
+   drive: observe → decide → `diamond_select` → confirm → loop through faints/switches → detected win/loss.
+   Watch the forced-switch path and `_changed` confirmation; tune `turn_wait` / `act_retries` / peek cadence.
+2. **Reliability polish:** the input is reliable-*ish* with the persistent mouse-mover + retry, but expect
+   occasional missed presses — the retry-until-observed loop absorbs them; widen retries/waits if needed.
+3. Solve reliable **relaunch-into-battle** (menu "Run" activation) so a core crash can auto-recover unattended
+   (currently needs the user to click Run; then `F4` loads the save state).
+4. Pre-battle menu navigation (choosing mode/cup/team) is still unbuilt — a fresh battle is set up manually.
 
 **Live-session preamble every time:** launch RetroArch → History → Run the ROM → get to a battle action
-menu → F2 (save state). Keep the RetroArch window a normal size (viewport crop handles the rest).
+menu → **F2** (save state) so experiments can reset. Keep the RetroArch window a normal size (the viewport
+crop handles sizing).
 
 ## What's solid and needs no rework
 
-- Battle core / KB / guardrails / mock backend / 57 tests.
-- Observe: `capture_region(...,'window')` → viewport crop → `action_menu_open` + `read_panels` reads
-  both Pokémon (name+HP) at any window size. Verified across 1476×1120 and 1426×1081 viewports, 5/5.
+- Battle core / KB (165 moves + 151 species) / guardrails / mock backend / 61 tests.
+- Observe: `capture_region(...,'window')` → viewport crop → `action_menu_open` + `read_panels` reads both
+  Pokémon (name+HP) at any window size. Verified across multiple viewport sizes.
+- The full act path: `diamond_select` (moves + switches), continuous mouse, retry-until-observed, faint
+  handling, and battle-end/winner detection — all live-verified in a complete battle.
