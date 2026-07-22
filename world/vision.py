@@ -32,8 +32,8 @@ from battle.state import Action
 from kb import default_kb
 from vision import layout as _layout
 from vision.capture import capture_region
-from vision.observe import (action_menu_open, on_battle_screen, read_moves,
-                            read_panels, read_party, switch_screen_open)
+from vision.observe import (action_menu_open, battle_result, on_battle_screen,
+                            read_moves, read_panels, read_party, switch_screen_open)
 
 # Diamond slot -> D-pad direction (the C-button the actuator presses). Fixed order so a
 # slot index the agent chose maps to one deterministic direction.
@@ -237,9 +237,14 @@ class VisionBackend:
         if self._done:
             return True
         v = self.cfg["world"].get("vision", {})
-        if on_battle_screen(self._frame(), self._ocr_engine(), self.kb, _layout.ACTION):
+        frame, ocr = self._frame(), self._ocr_engine()
+        winner = battle_result(frame, ocr)                 # the WIN/LOSE result screen
+        if winner is not None:
+            self._done, self._winner = True, winner
+            return True
+        if on_battle_screen(frame, ocr, self.kb, _layout.ACTION):
             self._off_screen = 0
-        else:
+        else:                                              # debounce fallback
             self._off_screen += 1
             if self._off_screen >= v.get("end_polls", 5):
                 self._done = True

@@ -115,6 +115,26 @@ def switch_screen_open(img, ocr, kb: KB, regions: dict | None = None) -> bool:
     return "CHECK" in text and "CANCEL" not in text and "BATTLE" not in text and "RUN" not in text
 
 
+def battle_result(img, ocr) -> str | None:
+    """Detect the end-of-battle result screen and who won. It stacks two rows — "1P"
+    (the player) over "COM" (the opponent) — each with a big WIN or LOSE word. The WIN/
+    LOSE word in the SAME row as "1P" is the player's outcome, so the one nearer 1P's y
+    wins. Returns "self" (player won), "opponent" (player lost), or None (not the result
+    screen). Live-verified 2026-07-22 against a real loss screen (1P=LOSE / COM=WIN)."""
+    res = ocr.recognize(img)
+    def cy(r):
+        return r.bbox[1] + r.bbox[3] / 2
+    wins = [cy(r) for r in res if "WIN" in r.text.upper()]
+    loses = [cy(r) for r in res if "LOSE" in r.text.upper()]
+    if not (wins or loses):
+        return None
+    ps = [cy(r) for r in res if "1P" in r.text.upper().replace(" ", "")]
+    p = ps[0] if ps else 0.1                             # 1P sits in the top row
+    win_d = min((abs(y - p) for y in wins), default=9.0)
+    lose_d = min((abs(y - p) for y in loses), default=9.0)
+    return "self" if win_d < lose_d else "opponent"
+
+
 def on_battle_screen(img, ocr, kb: KB, regions: dict) -> bool:
     """True while we're still in a battle: the action bar, a forced-switch prompt, or
     both HP panels are showing. False on a settled result/non-battle screen (used, with

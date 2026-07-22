@@ -109,3 +109,29 @@ def test_battle_ends_after_leaving_the_battle_screens():
     for _ in range(b.cfg["world"]["vision"]["end_polls"]):
         b.is_over()
     assert b.is_over() is True
+
+
+class _PosOCR:
+    """Returns a fixed set of positioned tokens (text, (x,y,w,h)) every recognize()."""
+    def __init__(self, toks): self._toks = toks
+
+    def recognize(self, _img):
+        from vision.ocr import OCRResult
+        return [OCRResult(t, 0.9, box) for t, box in self._toks]
+
+
+def test_battle_result_wins_by_the_1p_row():
+    from vision.observe import battle_result
+    img = Image.new("RGB", (16, 16))
+    # 1P (top) shares its row with LOSE, WIN is in COM's (bottom) row -> player lost.
+    loss = _PosOCR([("1P", (0.12, 0.05, 0.10, 0.05)),
+                    ("LOSE", (0.45, 0.22, 0.20, 0.06)),
+                    ("WIN", (0.28, 0.71, 0.18, 0.06))])
+    assert battle_result(img, loss) == "opponent"
+    # flipped screen: WIN shares 1P's row -> player won.
+    win = _PosOCR([("1P", (0.12, 0.05, 0.10, 0.05)),
+                   ("WIN", (0.45, 0.22, 0.18, 0.06)),
+                   ("LOSE", (0.28, 0.71, 0.20, 0.06))])
+    assert battle_result(img, win) == "self"
+    # no result screen.
+    assert battle_result(img, _PosOCR([("A BATTLE", (0.4, 0.1, 0.2, 0.05))])) is None
